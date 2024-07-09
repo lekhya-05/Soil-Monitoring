@@ -1,0 +1,181 @@
+#include<LiquidCrystal.h>
+LiquidCrystal lcd(A2,A3, A4, A5, A6, A7);
+#include <SoftwareSerial.h>
+#include <Wire.h>
+#define RE 8
+#define DE 7
+#include <DHT.h>
+#define DHTPIN A0
+#define DHTTYPE DHT11
+int soilmoisture = A1;
+DHT dht(DHTPIN, DHTTYPE);
+const byte nitro[] = {0x01, 0x03, 0x00, 0x1e, 0x00, 0x01, 0xe4, 0x0c};
+const byte phos[] = {0x01, 0x03, 0x00, 0x1f, 0x00, 0x01, 0xb5, 0xcc};
+const byte pota[] = {0x01, 0x03, 0x00, 0x20, 0x00, 0x01, 0x85, 0xc0};
+byte values[11];
+SoftwareSerial mod(11,12);//r0=11,d1=12
+String msg;
+String uno;
+byte val1, val2, val3;
+void setup(){
+  dht.begin();
+  lcd.begin(16,2);
+  Serial.begin(9600); 
+   Serial1.begin(9600); 
+  mod.begin(9600);
+  pinMode(soilmoisture, INPUT);
+  pinMode(RE, OUTPUT);
+  pinMode(DE, OUTPUT);
+  delay(500);
+}
+void loop(){
+  int soilvalue = analogRead(soilmoisture);
+//  Serial.print( "soil value: ");
+//  Serial.println(soilvalue );
+lcd.clear();
+lcd.setCursor(0,0);
+lcd.print("soilvalue: ");
+lcd.print(soilvalue);
+delay(2000);
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+//  Serial.print("temperature: ");
+//  Serial.println(temperature);
+//  Serial.print("humidity: ");
+//  Serial.println(humidity);
+//  delay(2000);
+lcd.clear();
+lcd.setCursor(0,0);
+lcd.print("temp: ");
+lcd.print(temperature);
+lcd.setCursor(0,1);
+lcd.print("hum: ");
+lcd.print(humidity);
+delay(2000);
+   val1 = nitrogen();
+  delay(250);
+  val2 = phosphorous();
+  delay(250);
+  val3 = potassium();
+  delay(250);
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("N: ");
+  lcd.print(val1);
+  //lcd.println(" mg/kg");
+  lcd.setCursor(6, 0);
+  lcd.print(" P: ");
+  lcd.print(val2);
+  // lcd.println(" mg/kg");
+  //delay(2000);
+  lcd.setCursor(0, 1);
+  lcd.print("Po: ");
+  lcd.print(val3);
+  lcd.println(" mg/kg");
+  delay(2000);
+   if (temperature > 32)
+  {
+   msg="Temperature increases";
+   SendMessage();
+   delay(2000);
+  }
+  if ((soilvalue >=350)&&(soilvalue <=700)) //moisture
+  {
+    
+    msg = "low moisture ";
+    SendMessage();
+    delay(2000);
+   
+  }
+  if (val1 <= 200 ) {   //nitrogen threshold
+    
+    msg = "abnormal nitrogen values";
+    SendMessage();
+    delay(2000);
+    // Upload values to ThingSpeak
+    
+  }else if (val2 <= 25) { //phosphorus thresholdvalue
+    
+    msg = "abnormal phosphorus values";
+    SendMessage();
+    delay(2000);
+    // Upload values to ThingSpeak
+   
+  }else if (val3 <=145) { // pottasium thresholdvalue
+   
+    msg = "abnormal pottasium values";
+    SendMessage();
+    delay(2000);
+    // Upload values to ThingSpeak
+   
+  }
+uno = String("a") + String(val1 ) + String("b") + String(val2) + String("c") + String(val3 ) +String ("d")+ String(temperature)+String ("e")+ String(humidity)+String ("f")+ String(soilvalue)+String ("g");
+  Serial.println(uno);
+  delay(1000);
+}
+
+byte nitrogen() {
+  digitalWrite(DE, HIGH);
+  digitalWrite(RE, HIGH);
+  delay(10);
+  if (mod.write(nitro, sizeof(nitro)) == 8) {
+    digitalWrite(DE, LOW);
+    digitalWrite(RE, LOW);
+    for (byte i = 0; i < 7; i++) {
+      //Serial.print(mod.read(),HEX);
+      values[i] = mod.read();
+      Serial.print(values[i], HEX);
+    }
+    Serial.println();
+  }
+  return values[4];
+}
+
+byte phosphorous() {
+  digitalWrite(DE, HIGH);
+  digitalWrite(RE, HIGH);
+  delay(10);
+  if (mod.write(phos, sizeof(phos)) == 8) {
+    digitalWrite(DE, LOW);
+    digitalWrite(RE, LOW);
+    for (byte i = 0; i < 7; i++) {
+      //Serial.print(mod.read(),HEX);
+      values[i] = mod.read();
+      Serial.print(values[i], HEX);
+    }
+    Serial.println();
+  }
+  return values[4];
+}
+
+byte potassium() {
+  digitalWrite(DE, HIGH);
+  digitalWrite(RE, HIGH);
+  delay(10);
+  if (mod.write(pota, sizeof(pota)) == 8) {
+    digitalWrite(DE, LOW);
+    digitalWrite(RE, LOW);
+    for (byte i = 0; i < 7; i++) {
+      //Serial.print(mod.read(),HEX);
+      values[i] = mod.read();
+      Serial.print(values[i], HEX);
+    }
+    Serial.println();
+  }
+  return values[4];
+}
+void SendMessage()
+{
+  Serial1.println("Setting the GSM in text mode");
+  Serial1.println("AT+CMGF=1\r");
+  delay(2000);
+  Serial1.println("Sending SMS to the desired phone number!");
+  Serial1.println("AT+CMGS=\"+919440804520\"\r"); //add number
+  // Replace x with mobile number
+  delay(2000);
+  Serial1.println(msg);    // SMS Text
+  delay(2000);
+  Serial1.write(26);               // ASCII code of CTRL+Z
+  delay(2000);
+}
